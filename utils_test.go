@@ -1,11 +1,11 @@
 package utils
 
 import (
+	"testing"
+	. "launchpad.net/gocheck"
 	"appengine"
 	"appengine/aetest"
 	"appengine/datastore"
-	. "launchpad.net/gocheck"
-	"testing"
 )
 
 type MySuite struct{}
@@ -100,4 +100,26 @@ func (s *MySuite) TestSave(c *C) {
 	err = datastore.Get(ctx, key, dummy2)
 	c.Assert(err, IsNil)
 	c.Assert(dummy2.Slug, Equals, dummy.Slug)
+}
+
+func (s *MySuite) TestExistsInDatastore(c *C) {
+	dummy := &DummyObject{
+		Slug: "my-existent-string",
+	}
+
+	_, err := Save(ctx, dummy)
+	if err != nil {
+		c.Errorf("Failed to save dummy obj: %v", err.Error())
+		return
+	}
+
+	dummy2 := &DummyObject{
+		Slug: "my-nonexistent-string",
+	}
+
+	dummyExists := ExistsInDatastore(ctx, dummy)
+	c.Assert(dummyExists, Equals, true)
+
+	dummy2Exists := ExistsInDatastore(ctx, dummy2)
+	c.Assert(dummy2Exists, Equals, false)
 }
