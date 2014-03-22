@@ -1,14 +1,22 @@
 package utils
 
 import (
-	"appengine"
-	"appengine/datastore"
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"unicode"
+
+	"appengine"
+	"appengine/datastore"
 )
+
+// type ApiResponse is a generic API response struct
+type ApiResponse struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Result  interface{} `json:"result"`
+}
 
 func GenerateUniqueSlug(ctx appengine.Context, kind string, s string) (slug string) {
 	slug = GenerateSlug(s)
@@ -52,14 +60,7 @@ func GenerateSlug(s string) (slug string) {
 	}, strings.ToLower(strings.TrimSpace(s)))
 }
 
-// type ApiResponse is a generic API response struct
-type ApiResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Result  interface{} `json:"result"`
-}
-
-func Save(c appengine.Context, obj interface{}) (key *datastore.Key, err error) {
+func Save(ctx appengine.Context, obj interface{}) (key *datastore.Key, err error) {
 	kind, val := reflect.TypeOf(obj), reflect.ValueOf(obj)
 	str := val
 	if val.Kind().String() == "ptr" {
@@ -68,13 +69,9 @@ func Save(c appengine.Context, obj interface{}) (key *datastore.Key, err error) 
 	if str.Kind().String() != "struct" {
 		return nil, errors.New("Must pass a valid object to struct")
 	}
-	dsKind := kind.String()
-	if li := strings.LastIndex(dsKind, "."); li >= 0 {
-		//Format kind to be in a standard format used for datastore
-		dsKind = dsKind[li+1:]
-	}
+	dsKind := getDatastoreKind(kind)
 	if bsMethod := val.MethodByName("BeforeSave"); bsMethod.IsValid() {
-		bsMethod.Call([]reflect.Value{reflect.ValueOf(c)})
+		bsMethod.Call([]reflect.Value{reflect.ValueOf(ctx)})
 	}
 	//check for key field first
 	keyField := str.FieldByName("Key")
@@ -85,15 +82,15 @@ func Save(c appengine.Context, obj interface{}) (key *datastore.Key, err error) 
 	idField := str.FieldByName("ID")
 	if key == nil {
 		if idField.IsValid() && idField.Int() != 0 {
-			key = datastore.NewKey(c, dsKind, "", idField.Int(), nil)
+			key = datastore.NewKey(ctx, dsKind, "", idField.Int(), nil)
 		} else {
-			key = datastore.NewIncompleteKey(c, dsKind, nil)
+			key = datastore.NewIncompleteKey(ctx, dsKind, nil)
 		}
 	}
 	//Store in memcache
-	key, err = datastore.Put(c, key, obj)
+	key, err = datastore.Put(ctx, key, obj)
 	if err != nil {
-		c.Errorf("[utils/Save]: %v", err.Error())
+		ctx.Errorf("[utils/Save]: %v", err.Error())
 	} else {
 		if keyField.IsValid() {
 			keyField.Set(reflect.ValueOf(key))
@@ -102,8 +99,58 @@ func Save(c appengine.Context, obj interface{}) (key *datastore.Key, err error) 
 			idField.SetInt(key.IntID())
 		}
 		if asMethod := val.MethodByName("AfterSave"); asMethod.IsValid() {
-			asMethod.Call([]reflect.Value{reflect.ValueOf(c), reflect.ValueOf(key)})
+			asMethod.Call([]reflect.Value{reflect.ValueOf(ctx), reflect.ValueOf(key)})
 		}
+	}
+	return
+}
+
+// func ExistsInDatastore takes an appengine Context and an interface checks if that interface already exists in datastore
+// Will call any 'BeforeSave' method as appropriate, in case that method sets up a 'Key' field, otherwise checks for an ID field
+// and assumes that's the datastore IntID
+func ExistsInDatastore(ctx appengine.Context, obj interface{}) bool {
+	kind, val := reflect.TypeOf(obj), reflect.ValueOf(obj)
+	str := val
+	if val.Kind().String() == "ptr" {
+		kind, str = kind.Elem(), val.Elem()
+	}
+	if str.Kind().String() != "struct" {
+		return false
+	}
+	dsKind := getDatastoreKind(kind)
+	if bsMethod := val.MethodByName("BeforeSave"); bsMethod.IsValid() {
+		bsMethod.Call([]reflect.Value{reflect.ValueOf(ctx)})
+	}
+	var key *datastore.Key
+	//check for key field first
+	keyField := str.FieldByName("Key")
+	if keyField.IsValid() {
+		keyInterface := keyField.Interface()
+		key, _ = keyInterface.(*datastore.Key)
+	}
+	idField := str.FieldByName("ID")
+	if key == nil {
+		if idField.IsValid() && idField.Int() != 0 {
+			key = datastore.NewKey(ctx, dsKind, "", idField.Int(), nil)
+		}
+	}
+	if key == nil {
+		return false
+	}
+	err := datastore.Get(ctx, key, obj)
+	if err != nil {
+		return false
+	}
+	return true
+}
+
+// Takes a reflect kind and returns a valid string value matching that kind
+// Strips off any package namespacing, so 'accounts.Account' becomes just 'Account'
+func getDatastoreKind(kind reflect.Type) (dsKind string) {
+	dsKind = kind.String()
+	if li := strings.LastIndex(dsKind, "."); li >= 0 {
+		//Format kind to be in a standard format used for datastore
+		dsKind = dsKind[li+1:]
 	}
 	return
 }
