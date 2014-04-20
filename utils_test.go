@@ -95,7 +95,7 @@ func (s *MySuite) TestSave(c *C) {
 	c.Assert(dummy.BeforeSaveCalled, Equals, true)
 	c.Assert(dummy.AfterSaveCalled, Equals, true)
 
-	// Finally, confir this object actually exists in datastore
+	// Finally, confirm this object actually exists in datastore
 	dummy2 := &DummyObject{}
 	err = datastore.Get(ctx, key, dummy2)
 	c.Assert(err, IsNil)
@@ -122,4 +122,12 @@ func (s *MySuite) TestExistsInDatastore(c *C) {
 
 	dummy2Exists := ExistsInDatastore(ctx, dummy2)
 	c.Assert(dummy2Exists, Equals, false)
+}
+
+func (s *MySuite) TestInChain(c *C) {
+	chain := []string{"one", "two", "three"}
+	yep := InChain("two", chain)
+	c.Assert(yep, Equals, true)
+	nope := InChain("four", chain)
+	c.Assert(nope, Equals, false)
 }

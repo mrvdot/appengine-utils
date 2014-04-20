@@ -154,3 +154,15 @@ func getDatastoreKind(kind reflect.Type) (dsKind string) {
 	}
 	return
 }
+
+func InChain(needle string, haystack []string) bool {
+	if haystack == nil {
+		return false
+	}
+	for _, straw := range haystack {
+		if needle == straw {
+			return true
+		}
+	}
+	return false
+}
