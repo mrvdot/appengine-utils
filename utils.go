@@ -84,7 +84,14 @@ func Save(ctx appengine.Context, obj interface{}) (key *datastore.Key, err error
 		if idField.IsValid() && idField.Int() != 0 {
 			key = datastore.NewKey(ctx, dsKind, "", idField.Int(), nil)
 		} else {
-			key = datastore.NewIncompleteKey(ctx, dsKind, nil)
+			newId, _, err := datastore.AllocateIDs(ctx, dsKind, nil, 1)
+			if err == nil {
+				idField.SetInt(newId)
+				key = datastore.NewKey(ctx, dsKind, "", newId, nil)
+			} else {
+				ctx.Errorf("Failed to allocate new ID for this user: %v", err.Error())
+				key = datastore.NewIncompleteKey(ctx, dsKind, nil)
+			}
 		}
 	}
 	//Store in memcache
