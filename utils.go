@@ -86,7 +86,9 @@ func Save(ctx appengine.Context, obj interface{}) (key *datastore.Key, err error
 		} else {
 			newId, _, err := datastore.AllocateIDs(ctx, dsKind, nil, 1)
 			if err == nil {
-				idField.SetInt(newId)
+				if idField.IsValid() {
+					idField.SetInt(newId)
+				}
 				key = datastore.NewKey(ctx, dsKind, "", newId, nil)
 			} else {
 				ctx.Errorf("Failed to allocate new ID for this user: %v", err.Error())
