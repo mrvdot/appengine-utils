@@ -175,3 +175,49 @@ func InChain(needle string, haystack []string) bool {
 	}
 	return false
 }
+
+// Similar to "extend" in JS, only updates fields that are specified and not empty in newUser
+// Both new and main must be pointers to struct objects
+func Update(mainObj interface{}, newData interface{}) bool {
+	newDataVal, mainObjVal := reflect.ValueOf(newData).Elem(), reflect.ValueOf(mainObj).Elem()
+	fieldCount := newDataVal.NumField()
+	changed := false
+	for i := 0; i < fieldCount; i++ {
+		newField := newDataVal.Field(i)
+		// They passed in a value for this field, update our DB user
+		if newField.IsValid() && !IsEmpty(newField) {
+			dbField := mainObjVal.Field(i)
+			dbField.Set(newField)
+			changed = true
+		}
+	}
+	return changed
+}
+
+// reflect doesn't consider 0 or "" to be zero, so we double check those here
+func IsEmpty(val reflect.Value) bool {
+	typeStr := val.Kind().String()
+	switch typeStr {
+	case "int", "int8", "int16", "int32", "int64":
+		return val.Int() == 0
+	case "float", "float8", "float16", "float32", "float64":
+		return val.Float() == 0
+	case "string":
+		return val.String() == ""
+	case "slice", "ptr", "map", "chan", "func":
+		// Check for empty slices and props
+		return val.IsNil()
+	case "struct":
+		fieldCount := val.NumField()
+		for i := 0; i < fieldCount; i++ {
+			field := val.Field(i)
+			// They passed in a value for this field, update our DB user
+			if field.IsValid() && !IsEmpty(field) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
