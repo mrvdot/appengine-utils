@@ -13,9 +13,10 @@ import (
 
 // type ApiResponse is a generic API response struct
 type ApiResponse struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Result  interface{} `json:"result"`
+	Code    int                    `json:"code"`
+	Message string                 `json:"message"`
+	Result  interface{}            `json:"result"`
+	Data    map[string]interface{} `json:"data"` // Generic extra data to be sent along in response
 }
 
 func GenerateUniqueSlug(ctx appengine.Context, kind string, s string) (slug string) {
